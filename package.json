@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "node --watch src/index.js",
+    "dev:frontend": "npm run dev --prefix frontend",
     "start": "node src/index.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -28,7 +29,10 @@
   },
   "homepage": "https://github.com/nghiemph95/Real-Time-Sports-Broadcast#readme",
   "dependencies": {
+    "@arcjet/inspect": "^1.1.0",
+    "@arcjet/node": "^1.1.0",
     "@neondatabase/serverless": "^1.0.2",
+    "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "drizzle-orm": "^0.45.1",
     "express": "^5.2.1",
