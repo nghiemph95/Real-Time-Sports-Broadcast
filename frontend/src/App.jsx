@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom';
 import { WebSocketProvider } from './context/WebSocketContext';
 import { HomePage } from './pages/HomePage';
 import { MatchDetailPage } from './pages/MatchDetailPage';
+import { SeedPage } from './pages/SeedPage';
 
 export default function App() {
   return (
@@ -9,6 +10,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/matches/:id" element={<MatchDetailPage />} />
+        <Route path="/seed" element={<SeedPage />} />
       </Routes>
     </WebSocketProvider>
   );

@@ -13,6 +13,12 @@ export function Layout({ children, connectionStatus }) {
             Live Sports
           </Link>
           <div className="flex items-center gap-3">
+            <Link
+              to="/seed"
+              className="text-sm text-surface-400 hover:text-white transition-colors"
+            >
+              Seed
+            </Link>
             <LiveBadge status={connectionStatus} />
           </div>
         </div>

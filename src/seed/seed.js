@@ -16,6 +16,31 @@ const API_URL =
   process.env.API_URL ||
   `http://127.0.0.1:${process.env.PORT || 8000}`;
 
+/** Override bởi runSeed({ apiUrl }) khi gọi từ API. */
+let _apiUrlOverride = null;
+function getApiUrl() {
+  return _apiUrlOverride ?? API_URL;
+}
+
+/** delay(ms) hoặc delay(ms, signal) — thoát sớm nếu signal.aborted. */
+function delay(ms, signal) {
+  if (!signal) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    const onAbort = () => {
+      clearTimeout(t);
+      resolve();
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 // Dùng data giả từ data.js (export default { matches, commentary })
 async function loadSeedData() {
   const module = await import("../data/data.js");
@@ -39,7 +64,7 @@ async function loadSeedData() {
 }
 
 async function fetchMatches(limit = 100) {
-  const response = await fetch(`${API_URL}/matches?limit=${limit}`);
+  const response = await fetch(`${getApiUrl()}/matches?limit=${limit}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch matches: ${response.status}`);
   }
@@ -104,7 +129,7 @@ function buildMatchTimes(seedMatch) {
 async function createMatch(seedMatch) {
   const { startTime, endTime } = buildMatchTimes(seedMatch);
 
-  const response = await fetch(`${API_URL}/matches`, {
+  const response = await fetch(`${getApiUrl()}/matches`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -153,7 +178,7 @@ async function insertCommentary(matchId, entry) {
     payload.tags = entry.tags;
   }
 
-  const response = await fetch(`${API_URL}/matches/${matchId}/commentary`, {
+  const response = await fetch(`${getApiUrl()}/matches/${matchId}/commentary`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     // NOTE: Avoid sending nulls; the API expects missing optional fields.
@@ -177,65 +202,63 @@ async function insertCommentary(matchId, entry) {
   return responsePayload.data;
 }
 
-// NOTE: Score delta logic is commented out because this codebase
-// does not expose score update endpoints.
-// function extractRuns(entry) {
-//   if (Number.isFinite(entry.runs)) {
-//     return entry.runs;
-//   }
-//   if (entry.metadata && Number.isFinite(entry.metadata.runs)) {
-//     return entry.metadata.runs;
-//   }
-//   if (entry.eventType === "four") {
-//     return 4;
-//   }
-//   if (entry.eventType === "six") {
-//     return 6;
-//   }
-//   if (entry.eventType === "run") {
-//     return 1;
-//   }
-//   return null;
-// }
-//
-// function scoreDeltaFromEntry(entry, match) {
-//   if (entry.scoreDelta && typeof entry.scoreDelta === "object") {
-//     return {
-//       home: Number(entry.scoreDelta.home || 0),
-//       away: Number(entry.scoreDelta.away || 0),
-//     };
-//   }
-//
-//   if (entry.eventType === "goal") {
-//     if (entry.team === match.homeTeam) {
-//       return { home: 1, away: 0 };
-//     }
-//     if (entry.team === match.awayTeam) {
-//       return { home: 0, away: 1 };
-//     }
-//   }
-//
-//   const runs = extractRuns(entry);
-//   if (runs !== null) {
-//     if (entry.team === match.homeTeam) {
-//       return { home: runs, away: 0 };
-//     }
-//     if (entry.team === match.awayTeam) {
-//       return { home: 0, away: runs };
-//     }
-//   }
-//
-//   return null;
-// }
-//
-// function fakeScoreDelta(matchState) {
-//   const nextSide = matchState.fakeNext === "home" ? "away" : "home";
-//   matchState.fakeNext = nextSide;
-//   const points = 1;
-//   return nextSide === "home"
-//     ? { home: points, away: 0 }
-//     : { home: 0, away: points };
-// }
+function extractRuns(entry) {
+  if (Number.isFinite(entry.runs)) {
+    return entry.runs;
+  }
+  if (entry.metadata && Number.isFinite(entry.metadata.runs)) {
+    return entry.metadata.runs;
+  }
+  if (entry.eventType === "four") {
+    return 4;
+  }
+  if (entry.eventType === "six") {
+    return 6;
+  }
+  if (entry.eventType === "run") {
+    return 1;
+  }
+  return null;
+}
+
+function scoreDeltaFromEntry(entry, match) {
+  if (entry.scoreDelta && typeof entry.scoreDelta === "object") {
+    return {
+      home: Number(entry.scoreDelta.home || 0),
+      away: Number(entry.scoreDelta.away || 0),
+    };
+  }
+
+  if (entry.eventType === "goal") {
+    if (entry.team === match.homeTeam) {
+      return { home: 1, away: 0 };
+    }
+    if (entry.team === match.awayTeam) {
+      return { home: 0, away: 1 };
+    }
+  }
+
+  const runs = extractRuns(entry);
+  if (runs !== null) {
+    if (entry.team === match.homeTeam) {
+      return { home: runs, away: 0 };
+    }
+    if (entry.team === match.awayTeam) {
+      return { home: 0, away: runs };
+    }
+  }
+
+  return null;
+}
+
+function fakeScoreDelta(matchState) {
+  const nextSide = matchState.fakeNext === "home" ? "away" : "home";
+  matchState.fakeNext = nextSide;
+  const points = 1;
+  return nextSide === "home"
+    ? { home: points, away: 0 }
+    : { home: 0, away: points };
+}
 
 function inningsRank(period) {
   if (!period) {
@@ -272,28 +295,28 @@ function cricketBattingTeam(entry, match) {
   return null;
 }
 
-// function cricketScoreDelta(entry, match) {
-//   const battingTeam = cricketBattingTeam(entry, match);
-//   let delta = scoreDeltaFromEntry(entry, match);
-//   if (!delta) {
-//     if (!battingTeam) {
-//       return null;
-//     }
-//     const points = 1;
-//     return battingTeam === match.homeTeam
-//       ? { home: points, away: 0 }
-//       : { home: 0, away: points };
-//   }
-//
-//   if (!battingTeam) {
-//     return delta;
-//   }
-//
-//   if (battingTeam === match.homeTeam) {
-//     return { home: delta.home, away: 0 };
-//   }
-//   return { home: 0, away: delta.away };
-// }
+function cricketScoreDelta(entry, match) {
+  const battingTeam = cricketBattingTeam(entry, match);
+  const delta = scoreDeltaFromEntry(entry, match);
+  if (!delta) {
+    if (!battingTeam) {
+      return null;
+    }
+    const points = 1;
+    return battingTeam === match.homeTeam
+      ? { home: points, away: 0 }
+      : { home: 0, away: points };
+  }
+
+  if (!battingTeam) {
+    return delta;
+  }
+
+  if (battingTeam === match.homeTeam) {
+    return { home: delta.home, away: 0 };
+  }
+  return { home: 0, away: delta.away };
+}
 
 function normalizeCricketFeed(entries, match) {
   const sorted = [...entries].sort((a, b) => {
@@ -491,17 +514,16 @@ function getMatchEntry(entry, matchMap) {
   return matchMap.get(entry.matchId) ?? null;
 }
 
-// NOTE: Score updates are not part of this codebase yet.
-// async function updateMatchScore(matchId, homeScore, awayScore) {
-//   const response = await fetch(`${API_URL}/matches/${matchId}/score`, {
-//     method: "PATCH",
-//     headers: { "content-type": "application/json" },
-//     body: JSON.stringify({ homeScore, awayScore }),
-//   });
-//   if (!response.ok) {
-//     throw new Error(`Failed to update score: ${response.status}`);
-//   }
-// }
+async function updateMatchScore(matchId, homeScore, awayScore) {
+  const response = await fetch(`${getApiUrl()}/matches/${matchId}/score`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ homeScore, awayScore }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to update score: ${response.status}`);
+  }
+}
 
 function randomMatchDelay() {
   const range = NEW_MATCH_DELAY_MAX_MS - NEW_MATCH_DELAY_MIN_MS;
@@ -519,10 +541,21 @@ function randomMatchDelay() {
 //   }
 // }
 
-async function seed() {
-  console.log(`📡 Seeding via API: ${API_URL}`);
+/**
+ * Chạy seed (có thể gọi từ CLI hoặc từ API).
+ * @param {{ signal?: AbortSignal, apiUrl?: string }} options
+ *   - signal: nếu có, khi abort sẽ thoát vòng lặp sớm.
+ *   - apiUrl: base URL của REST API (khi gọi từ server, dùng URL của chính server).
+ */
+export async function runSeed(options = {}) {
+  const signal = options.signal ?? null;
+  _apiUrlOverride = options.apiUrl ?? null;
+  const apiBase = getApiUrl();
+  console.log(`📡 Seeding via API: ${apiBase}`);
 
+  if (signal?.aborted) return;
   const { feed, matches: seedMatches } = await loadSeedData();
+  if (signal?.aborted) return;
   const matchesList = await fetchMatches();
 
   const matchMap = new Map();
@@ -549,9 +582,9 @@ async function seed() {
       if (!match || (FORCE_LIVE && !isLiveMatch(match))) {
         match = await createMatch(seedMatch);
         matchKeyMap.set(key, match);
-        const delayMs = randomMatchDelay();
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        await delay(randomMatchDelay(), signal);
       }
+      if (signal?.aborted) return;
       if (Number.isInteger(seedMatch.id)) {
         matchMap.set(seedMatch.id, {
           match,
@@ -571,18 +604,27 @@ async function seed() {
     throw new Error("No matches found or created in the database.");
   }
 
-  // NOTE: Score resets are disabled because score updates are not supported.
-  // const resetIds = new Set();
-  // for (const entry of matchMap.values()) {
-  //   const matchId = entry.match?.id;
-  //   if (!Number.isInteger(matchId) || resetIds.has(matchId)) {
-  //     continue;
-  //   }
-  //   resetIds.add(matchId);
-  //   entry.score.home = 0;
-  //   entry.score.away = 0;
-  //   await updateMatchScore(matchId, 0, 0);
-  // }
+  // Reset score về 0 chỉ cho trận đang live (PATCH /score chỉ chấp nhận match live).
+  if (signal?.aborted) return;
+  const resetIds = new Set();
+  for (const entry of matchMap.values()) {
+    if (signal?.aborted) return;
+    const matchId = entry.match?.id;
+    if (!Number.isInteger(matchId) || resetIds.has(matchId)) {
+      continue;
+    }
+    if (!isLiveMatch(entry.match)) {
+      continue;
+    }
+    resetIds.add(matchId);
+    try {
+      await updateMatchScore(matchId, 0, 0);
+      entry.score.home = 0;
+      entry.score.away = 0;
+    } catch (e) {
+      console.warn(`⚠️  Skip reset score for match ${matchId}:`, e.message);
+    }
+  }
 
   const expandedFeed = expandFeedForMatches(feed, seedMatches);
   const randomizedFeed = buildRandomizedFeed(expandedFeed, matchMap);
@@ -599,6 +641,7 @@ async function seed() {
   // }
 
   for (let i = 0; i < randomizedFeed.length; i += 1) {
+    if (signal?.aborted) break;
     const entry = randomizedFeed[i];
     const target = getMatchEntry(entry, matchMap);
     if (!target) {
@@ -613,19 +656,18 @@ async function seed() {
     const row = await insertCommentary(match.id, entry);
     console.log(`📣 [Match ${match.id}] ${row.message}`);
 
-    // NOTE: Score updates are intentionally disabled in this codebase.
-    // const isCricket = String(match.sport).toLowerCase() === "cricket";
-    // const delta = isCricket
-    //   ? cricketScoreDelta(entry, match, target)
-    //   : (scoreDeltaFromEntry(entry, match) ?? fakeScoreDelta(target));
-    // if (delta) {
-    //   target.score.home += delta.home;
-    //   target.score.away += delta.away;
-    //   await updateMatchScore(match.id, target.score.home, target.score.away);
-    //   console.log(
-    //     `📊 [Match ${match.id}] Score updated: ${target.score.home}-${target.score.away}`,
-    //   );
-    // }
+    const isCricket = String(match.sport).toLowerCase() === "cricket";
+    const delta = isCricket
+      ? cricketScoreDelta(entry, match, target)
+      : (scoreDeltaFromEntry(entry, match) ?? fakeScoreDelta(target));
+    if (delta) {
+      target.score.home += delta.home;
+      target.score.away += delta.away;
+      await updateMatchScore(match.id, target.score.home, target.score.away);
+      console.log(
+        `📊 [Match ${match.id}] Score updated: ${target.score.home}-${target.score.away}`,
+      );
+    }
 
     // NOTE: Match status updates are intentionally disabled in this codebase.
     // if (Number.isInteger(entry.matchId)) {
@@ -640,12 +682,26 @@ async function seed() {
     // }
 
     if (DELAY_MS > 0) {
-      await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
+      await delay(DELAY_MS, signal);
     }
+  }
+  _apiUrlOverride = null;
+}
+
+let isRunAsCli = false;
+if (typeof process !== "undefined" && process.argv[1] && import.meta.url.startsWith("file:")) {
+  try {
+    const { fileURLToPath } = await import("node:url");
+    const { resolve } = await import("node:path");
+    isRunAsCli = resolve(fileURLToPath(import.meta.url)) === resolve(process.argv[1]);
+  } catch {
+    // ignore
   }
 }
 
-seed().catch((err) => {
-  console.error("❌ Seed error:", err);
-  process.exit(1);
-});
+if (isRunAsCli) {
+  runSeed().catch((err) => {
+    console.error("❌ Seed error:", err);
+    process.exit(1);
+  });
+}
