@@ -1,0 +1,41 @@
+{
+  "name": "real-time-sports-broadcast",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "demo": "node src/crud-demo.js",
+    "seed": "node src/seed/seed.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nghiemph95/Real-Time-Sports-Broadcast.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/nghiemph95/Real-Time-Sports-Broadcast/issues"
+  },
+  "homepage": "https://github.com/nghiemph95/Real-Time-Sports-Broadcast#readme",
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
+    "dotenv": "^17.3.1",
+    "drizzle-orm": "^0.45.1",
+    "express": "^5.2.1",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.9",
+    "esbuild": "^0.27.3"
+  }
+}
